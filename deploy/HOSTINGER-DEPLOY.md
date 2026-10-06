@@ -17,13 +17,16 @@ cd frontend && npm run build
 index.html, assets/, favicon.svg, icons.svg
 .htaccess            ← SPA routes + /api passthrough
 api/                 ← the PHP backend (index.php, src/, config/, storage/, uploads/)
+database/            ← schema.sql + seed.sql (blocked from the web by its own .htaccess)
 ```
 
 ## 1. Create the site + database
 
 1. hPanel → **Websites → Import website → Upload your website files** → pick your domain.
 2. hPanel → **Databases → MySQL Databases** → create a database + user (note name/user/password).
-3. **phpMyAdmin** → select the DB → **Import** → `database/schema.sql` → Go, then `database/seed.sql`.
+3. **phpMyAdmin** → select the DB → **Import** → after upload, pick
+   `database/schema.sql` from inside `public_html` (it ships in the zip) → Go,
+   then repeat for `database/seed.sql`.
 
 ## 2. Upload
 
