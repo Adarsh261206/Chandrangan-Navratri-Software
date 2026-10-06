@@ -11,3 +11,7 @@ backend/storage/ratelimit/*
 # Real participant uploads stay out of the repo (only seeded demo photos are committed)
 backend/uploads/participants/*
 !backend/uploads/participants/demo-*.webp
+
+# Generated deploy artifacts
+deploy/*.zip
+Screenshot*.png
