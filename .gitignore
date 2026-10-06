@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+backend/config/config.local.php
+backend/storage/logs/*
+backend/storage/ratelimit/*
+!backend/storage/**/.gitkeep

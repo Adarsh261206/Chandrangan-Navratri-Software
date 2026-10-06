@@ -1,0 +1,31 @@
+# API routing for ChandranganXSumit Navratrotsav
+# Mounted at /api in production (Hostinger shared hosting / LiteSpeed / Apache).
+
+Options -Indexes -MultiViews
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Internal application folders are never web-accessible.
+  RewriteRule ^(src|storage|config|vendor)/ - [F,L]
+
+  # Serve real files (e.g. /api/uploads/...) directly.
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # Route everything else through the API front controller.
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Never expose source or config files.
+<FilesMatch "\.(sql|log|md|json|lock|yml|yaml|ini|dist)$">
+  Require all denied
+</FilesMatch>
+
+<FilesMatch "^config\.php$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/json text/html text/plain text/css application/javascript
+</IfModule>
