@@ -7,3 +7,7 @@ backend/config/config.local.php
 backend/storage/logs/*
 backend/storage/ratelimit/*
 !backend/storage/**/.gitkeep
+
+# Real participant uploads stay out of the repo (only seeded demo photos are committed)
+backend/uploads/participants/*
+!backend/uploads/participants/demo-*.webp

@@ -3,9 +3,11 @@ import type {
   AdminUser,
   DashboardStats,
   DuplicateCheck,
+  EventDaysPayload,
   Paginated,
   Participant,
-  PublicAgeGroup,
+  PrizePosition,
+  PublicResults,
 } from '../types'
 
 export interface ApiErrorPayload {
@@ -182,6 +184,11 @@ export const api = {
   dashboard: {
     stats: () => request<DashboardStats>('/dashboard/stats'),
   },
+  eventDays: {
+    list: () => request<EventDaysPayload>('/event-days'),
+    updateDates: (days: Record<number, string>) =>
+      request<EventDaysPayload>('/event-days', { method: 'PUT', body: { days } }),
+  },
   ageGroups: {
     list: () => request<{ items: AgeGroup[] }>('/age-groups'),
     get: (id: number) => request<AgeGroup>(`/age-groups/${id}`),
@@ -201,15 +208,17 @@ export const api = {
       per_page?: number
       age_group_id?: number
       prize_position?: number
+      day_id?: number
     }) => request<Paginated<Participant>>(`/participants${queryString(params)}`),
-    search: (q: string, page = 1, perPage = 20) =>
+    search: (q: string, page = 1, perPage = 20, dayId?: number) =>
       request<Paginated<Participant>>(
-        `/participants/search${queryString({ q, page, per_page: perPage })}`
+        `/participants/search${queryString({ q, page, per_page: perPage, day_id: dayId })}`
       ),
     checkDuplicate: (
       name: string,
       ageGroupId?: number,
       prizePosition?: number,
+      dayId?: number,
       signal?: AbortSignal
     ) =>
       request<DuplicateCheck>(
@@ -217,6 +226,7 @@ export const api = {
           name,
           age_group_id: ageGroupId,
           prize_position: prizePosition,
+          day_id: dayId,
         })}`,
         { signal }
       ),
@@ -224,11 +234,16 @@ export const api = {
     remove: (id: number) => request<null>(`/participants/${id}`, { method: 'DELETE' }),
     create: (formData: FormData) =>
       request<CreateParticipantResult>('/participants', { method: 'POST', formData }),
+    move: (id: number, prizePosition: PrizePosition) =>
+      request<{ participant: Participant; swapped_with: { name: string; prize_position: PrizePosition } | null }>(
+        `/participants/${id}/move`,
+        { method: 'POST', body: { prize_position: prizePosition } }
+      ),
   },
   results: {
-    public: (ageGroupId?: number) =>
-      request<{ age_groups: PublicAgeGroup[] }>(
-        `/results${queryString({ age_group_id: ageGroupId })}`
+    public: (ageGroupId?: number, dayId?: number) =>
+      request<PublicResults>(
+        `/results${queryString({ age_group_id: ageGroupId, day_id: dayId })}`
       ),
   },
 }

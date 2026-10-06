@@ -29,6 +29,15 @@ export function Modal({
   const titleId = useId()
   const descriptionId = useId()
 
+  // Keep the latest onClose in a ref so the focus-trap effect only runs when
+  // `open` changes. Depending on `onClose` directly made the effect re-run on
+  // every keystroke (inline handlers are new identities each render), which
+  // stole focus from the input and dropped it on the close button.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
   useEffect(() => {
     if (!open) return
 
@@ -37,17 +46,15 @@ export function Modal({
     const previousOverflow = style.overflow
     style.overflow = 'hidden'
 
+    // Focus the panel itself (not a button) so typing is never interrupted.
     const focusTimer = window.setTimeout(() => {
-      const focusable = panelRef.current?.querySelector<HTMLElement>(
-        'input, select, textarea, button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
-      )
-      focusable?.focus()
+      panelRef.current?.focus()
     }, 30)
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== 'Tab' || !panelRef.current) return
@@ -79,7 +86,7 @@ export function Modal({
       style.overflow = previousOverflow
       previouslyFocused.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
@@ -93,11 +100,12 @@ export function Modal({
       <div
         ref={panelRef}
         role="dialog"
+        tabIndex={-1}
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          'relative flex max-h-[92vh] w-full flex-col animate-sheet-up rounded-t-2xl bg-white shadow-sheet sm:animate-scale-in sm:rounded-2xl sm:shadow-card-hover',
+          'relative flex max-h-[92vh] w-full flex-col animate-sheet-up rounded-t-2xl bg-white shadow-sheet focus:outline-none sm:animate-scale-in sm:rounded-2xl sm:shadow-card-hover',
           size === 'sm' && 'sm:max-w-md',
           size === 'md' && 'sm:max-w-lg',
           size === 'lg' && 'sm:max-w-2xl'

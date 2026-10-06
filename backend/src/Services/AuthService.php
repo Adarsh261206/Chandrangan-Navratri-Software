@@ -30,7 +30,7 @@ final class AuthService
         );
 
         $row = Database::one(
-            'SELECT id, username, password_hash, is_active FROM admins WHERE username = ? LIMIT 1',
+            'SELECT id, username, password_hash, role, is_active FROM admins WHERE username = ? LIMIT 1',
             [$username]
         );
 
@@ -62,6 +62,7 @@ final class AuthService
         Auth::login([
             'id' => (int) $row['id'],
             'username' => (string) $row['username'],
+            'role' => (string) ($row['role'] ?? 'admin'),
         ]);
 
         AuditLogger::log((int) $row['id'], 'login', 'admin', (int) $row['id']);

@@ -9,15 +9,17 @@ interface DuplicateDialogProps {
   level: Exclude<DuplicateLevel, 'none'> | null
   name: string
   matches: DuplicateMatch[]
-  target: { ageGroupName: string; prize: PrizePosition }
+  target: { ageGroupName: string; prize: PrizePosition; dayLabel?: string }
   targetAgeGroupId?: number | null
+  targetDayId?: number | null
   loading?: boolean
   onCancel: () => void
   onAddAnyway: () => void
 }
 
-function slot(match: DuplicateMatch): string {
-  return `${match.age_group_name} → ${PRIZE_EMOJI[match.prize_position]} ${PRIZE_LABELS[match.prize_position]}`
+function slot(match: DuplicateMatch, targetDayId?: number | null): string {
+  const day = targetDayId != null && match.day_id !== targetDayId ? `${match.day_label} · ` : ''
+  return `${day}${match.age_group_name} → ${PRIZE_EMOJI[match.prize_position]} ${PRIZE_LABELS[match.prize_position]}`
 }
 
 export function DuplicateDialog({
@@ -27,14 +29,20 @@ export function DuplicateDialog({
   matches,
   target,
   targetAgeGroupId = null,
+  targetDayId = null,
   loading = false,
   onCancel,
   onAddAnyway,
 }: DuplicateDialogProps) {
   const primary = level
-    ? pickPrimaryMatch(level, matches, { ageGroupId: targetAgeGroupId, prize: target.prize })
+    ? pickPrimaryMatch(level, matches, {
+        ageGroupId: targetAgeGroupId,
+        prize: target.prize,
+        dayId: targetDayId,
+      })
     : matches[0] ?? null
-  const targetSlot = `${target.ageGroupName} → ${PRIZE_EMOJI[target.prize]} ${PRIZE_LABELS[target.prize]}`
+  const dayPrefix = target.dayLabel ? `${target.dayLabel} · ` : ''
+  const targetSlot = `${dayPrefix}${target.ageGroupName} → ${PRIZE_EMOJI[target.prize]} ${PRIZE_LABELS[target.prize]}`
 
   const title =
     level === 'exact'
@@ -73,7 +81,7 @@ export function DuplicateDialog({
               <b>{primary?.name ?? name}</b> is already registered in:
             </p>
             <p className="my-3 rounded-xl border border-cream-200 bg-cream-100 px-3 py-2.5 text-center text-base font-bold text-maroon-800">
-              {primary ? slot(primary) : targetSlot}
+              {primary ? slot(primary, targetDayId) : targetSlot}
             </p>
             {primary ? (
               <p className="text-charcoal-600">
@@ -90,7 +98,7 @@ export function DuplicateDialog({
               <b>{primary?.name ?? name}</b> is already registered in:
             </p>
             <p className="my-3 rounded-xl border border-cream-200 bg-cream-100 px-3 py-2.5 text-center text-base font-bold text-maroon-800">
-              {primary ? slot(primary) : ''}
+              {primary ? slot(primary, targetDayId) : ''}
             </p>
             <p>You are trying to add the same name to:</p>
             <p className="my-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-base font-bold text-amber-900">
@@ -104,7 +112,7 @@ export function DuplicateDialog({
               <b>{primary?.name ?? name}</b> was previously registered as:
             </p>
             <p className="my-3 rounded-xl border border-cream-200 bg-cream-100 px-3 py-2.5 text-center text-base font-bold text-maroon-800">
-              {primary ? slot(primary) : ''}
+              {primary ? slot(primary, targetDayId) : ''}
             </p>
             <p>You are now registering:</p>
             <p className="my-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-base font-bold text-amber-900">
@@ -127,7 +135,7 @@ export function DuplicateDialog({
                   key={match.participant_id}
                   className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
                 >
-                  <span className="font-semibold text-charcoal-800">{slot(match)}</span>
+                  <span className="font-semibold text-charcoal-800">{slot(match, targetDayId)}</span>
                   <span className="shrink-0 text-charcoal-500">
                     {match.participant_code} · {formatLongDate(match.created_at)}
                   </span>

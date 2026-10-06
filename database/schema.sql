@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS admins (
   id            INT UNSIGNED     NOT NULL AUTO_INCREMENT,
   username      VARCHAR(60)      NOT NULL,
   password_hash VARCHAR(255)     NOT NULL,
+  role          VARCHAR(20)      NOT NULL DEFAULT 'admin',
   is_active     TINYINT(1)       NOT NULL DEFAULT 1,
   created_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -38,15 +39,33 @@ CREATE TABLE IF NOT EXISTS age_groups (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
+-- Event days (Navratri = 9 days; dates are editable from Settings)
+--   id 1..9 = Day 1..Day 9; event_date drives "today" highlighting.
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS event_days (
+  id          TINYINT UNSIGNED NOT NULL,
+  label       VARCHAR(30)      NOT NULL,
+  event_date  DATE             NOT NULL,
+  is_active   TINYINT(1)       NOT NULL DEFAULT 1,
+  created_at  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_event_days_date (event_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ----------------------------------------------------------------------------
 -- Participants
---   prize_position is the prize: 1 = 1st, 2 = 2nd, 3 = 3rd
+--   day_id         = which Navratri day (1..9) the winner belongs to
+--   prize_position = the prize: 1 = 1st, 2 = 2nd, 3 = 3rd
 --   The prize is decided by WHERE the participant is added - never assigned later.
+--   One winner per (day, age group, prize) slot.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS participants (
   id               INT UNSIGNED   NOT NULL AUTO_INCREMENT,
   participant_code VARCHAR(16)    NOT NULL,
   name             VARCHAR(120)   NOT NULL,
   normalized_name  VARCHAR(160)   NOT NULL,
+  day_id           TINYINT UNSIGNED NOT NULL DEFAULT 1,
   age_group_id     INT UNSIGNED   NOT NULL,
   prize_position   TINYINT UNSIGNED NOT NULL,
   photo_path       VARCHAR(255)   NULL,
@@ -60,10 +79,13 @@ CREATE TABLE IF NOT EXISTS participants (
   UNIQUE KEY uq_participants_code (participant_code),
   UNIQUE KEY uq_participants_request_id (request_id),
   KEY idx_participants_normalized_name (normalized_name),
-  KEY idx_participants_group_prize (age_group_id, prize_position),
+  UNIQUE KEY uq_participants_day_group_prize (day_id, age_group_id, prize_position),
   KEY idx_participants_created_at (created_at),
   CONSTRAINT fk_participants_age_group
     FOREIGN KEY (age_group_id) REFERENCES age_groups (id)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT fk_participants_day
+    FOREIGN KEY (day_id) REFERENCES event_days (id)
     ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

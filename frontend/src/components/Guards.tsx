@@ -34,6 +34,25 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+/** Blocks every account except super_admin (redirects them to their simple home). */
+export function RequireSuperAdmin({ children }: { children: ReactNode }) {
+  const { status, isSuperAdmin } = useAuth()
+
+  if (status === 'loading') {
+    return <FullScreenLoader label="Checking your session…" />
+  }
+
+  if (status === 'anonymous') {
+    return <Navigate to="/login" replace />
+  }
+
+  if (!isSuperAdmin) {
+    return <Navigate to="/admin" replace />
+  }
+
+  return <>{children}</>
+}
+
 export function RedirectIfAuthenticated({ children }: { children: ReactNode }) {
   const { status } = useAuth()
 

@@ -18,8 +18,11 @@ final class ResultService
      *
      * @return array{age_groups: list<array<string, mixed>>}
      */
-    public function publicResults(?int $ageGroupId): array
+    public function publicResults(?int $ageGroupId, ?int $dayId): array
     {
+        $days = (new EventDayService())->list();
+        $selectedDay = $dayId ?? $days['today_id'] ?? 1;
+
         $groups = Database::all(
             'SELECT id, name FROM age_groups WHERE is_active = 1'
             . ($ageGroupId !== null ? ' AND id = ?' : '') . '
@@ -28,7 +31,7 @@ final class ResultService
         );
 
         if ($groups === []) {
-            return ['age_groups' => []];
+            return ['days' => $days['days'], 'selected_day' => $selectedDay, 'age_groups' => []];
         }
 
         $groupIds = array_map(static fn (array $g): int => (int) $g['id'], $groups);
@@ -37,9 +40,9 @@ final class ResultService
         $participants = Database::all(
             'SELECT p.name, p.prize_position, p.age_group_id, p.photo_path, p.photo_thumb_path, p.created_at
              FROM participants p
-             WHERE p.age_group_id IN (' . $placeholders . ')
+             WHERE p.day_id = ? AND p.age_group_id IN (' . $placeholders . ')
              ORDER BY p.prize_position ASC, p.created_at ASC, p.id ASC',
-            $groupIds
+            array_merge([$selectedDay], $groupIds)
         );
 
         $bucketed = [];
@@ -78,6 +81,10 @@ final class ResultService
             ];
         }
 
-        return ['age_groups' => $result];
+        return [
+            'days' => $days['days'],
+            'selected_day' => $selectedDay,
+            'age_groups' => $result,
+        ];
     }
 }

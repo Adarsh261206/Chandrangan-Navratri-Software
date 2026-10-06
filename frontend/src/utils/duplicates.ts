@@ -2,38 +2,45 @@ import type { DuplicateLevel, DuplicateMatch, PrizePosition } from '../types'
 
 /**
  * Picks the match that is most relevant to the slot being saved:
- * - exact: the registration in the same group and same prize
- * - group: a registration in the same group (different prize)
- * - other: a registration in a different group
+ * - exact: same day, same group and same prize
+ * - group: same day, same group (different prize)
+ * - other: a different day (or a different group on this day)
  * Falls back to the first match when no exact fit exists.
  */
 export function pickPrimaryMatch(
   level: DuplicateLevel,
   matches: DuplicateMatch[],
-  target: { ageGroupId: number | null; prize: PrizePosition }
+  target: { ageGroupId: number | null; prize: PrizePosition; dayId?: number | null }
 ): DuplicateMatch | null {
   if (matches.length === 0) return null
+
+  const sameDay = (match: DuplicateMatch) =>
+    target.dayId == null || match.day_id === target.dayId
 
   if (level === 'exact') {
     return (
       matches.find(
         (match) =>
-          match.age_group_id === target.ageGroupId && match.prize_position === target.prize
+          sameDay(match) &&
+          match.age_group_id === target.ageGroupId &&
+          match.prize_position === target.prize
       ) ??
-      matches.find((match) => match.age_group_id === target.ageGroupId) ??
+      matches.find((match) => sameDay(match) && match.age_group_id === target.ageGroupId) ??
       matches[0]
     )
   }
 
   if (level === 'group') {
     return (
-      matches.find((match) => match.age_group_id === target.ageGroupId) ?? matches[0]
+      matches.find((match) => sameDay(match) && match.age_group_id === target.ageGroupId) ??
+      matches[0]
     )
   }
 
   if (level === 'other') {
     return (
-      matches.find((match) => match.age_group_id !== target.ageGroupId) ?? matches[0]
+      matches.find((match) => !sameDay(match) || match.age_group_id !== target.ageGroupId) ??
+      matches[0]
     )
   }
 

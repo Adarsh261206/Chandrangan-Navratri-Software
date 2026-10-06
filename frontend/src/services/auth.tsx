@@ -8,6 +8,8 @@ type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 interface AuthContextValue {
   status: AuthStatus
   user: AdminUser | null
+  /** True when the signed-in account has the super_admin role (full access). */
+  isSuperAdmin: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
@@ -71,9 +73,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('anonymous')
   }, [])
 
+  const isSuperAdmin = user?.role === 'super_admin'
+
   const value = useMemo(
-    () => ({ status, user, login, logout }),
-    [status, user, login, logout]
+    () => ({ status, user, isSuperAdmin, login, logout }),
+    [status, user, isSuperAdmin, login, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

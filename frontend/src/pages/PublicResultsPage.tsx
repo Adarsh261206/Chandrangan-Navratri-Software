@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ResultsView } from '../components/ResultsView'
+import { DaySelector } from '../components/DaySelector'
 import { LoadError } from '../components/LoadError'
 import { IconTrophy } from '../components/ui/Icons'
 import { Skeleton } from '../components/ui/Skeleton'
 import { api, ApiError } from '../services/api'
-import type { PublicAgeGroup } from '../types'
+import { useDayParam } from '../hooks/useDayParam'
+import type { EventDay, PublicAgeGroup } from '../types'
 import { cn } from '../utils/cn'
 
 export default function PublicResultsPage() {
@@ -12,24 +14,38 @@ export default function PublicResultsPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [days, setDays] = useState<EventDay[]>([])
+  const [todayId, setTodayId] = useState<number | null>(null)
+  const [selectedDay, setSelectedDay] = useDayParam(days, todayId, { persist: false })
 
-  const load = useCallback(async () => {
+  const loadSeq = useRef(0)
+
+  const load = useCallback(async (dayId: number) => {
+    const seq = ++loadSeq.current
     setLoading(true)
     setError(null)
     try {
-      const result = await api.results.public()
+      const [result, dayList] = await Promise.all([
+        api.results.public(undefined, dayId),
+        api.eventDays.list(),
+      ])
+      if (seq !== loadSeq.current) return // a newer day was requested
+      setDays(dayList.days)
+      setTodayId(dayList.today_id)
       setGroups(result.age_groups)
       setSelectedId((current) => current ?? result.age_groups[0]?.id ?? null)
     } catch (err) {
+      if (seq !== loadSeq.current) return
       setError(err instanceof ApiError ? err.message : 'Could not load results.')
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [])
 
+  // Always fetch the selected day (?day=N), never the server default.
   useEffect(() => {
-    void load()
-  }, [load])
+    void load(selectedDay)
+  }, [load, selectedDay])
 
   const selected = groups.find((group) => group.id === selectedId) ?? null
 
@@ -48,6 +64,10 @@ export default function PublicResultsPage() {
       </header>
 
       <div className="mt-7">
+        <DaySelector days={days} value={selectedDay} onChange={setSelectedDay} loading={loading} />
+      </div>
+
+      <div className="mt-3">
         {loading ? (
           <div className="flex gap-2 overflow-hidden" aria-hidden="true">
             {[0, 1, 2, 3, 4].map((index) => (
@@ -91,9 +111,9 @@ export default function PublicResultsPage() {
             <Skeleton className="h-24 rounded-2xl" />
           </div>
         ) : error ? (
-          <LoadError message={error} onRetry={() => void load()} />
+          <LoadError message={error} onRetry={() => void load(selectedDay)} />
         ) : selected ? (
-          <ResultsView key={selected.id} group={selected} variant="public" />
+          <ResultsView key={`${selectedDay}-${selected.id}`} group={selected} variant="public" />
         ) : (
           <LoadError message="No results are available yet." />
         )}

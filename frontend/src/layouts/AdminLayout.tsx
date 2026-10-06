@@ -34,10 +34,18 @@ function navLinkClass(isActive: boolean): string {
   )
 }
 
+const LIMITED_NAV_ITEMS = [
+  { to: '/admin', label: 'Home', icon: IconDashboard, end: true },
+  { to: '/admin/participants', label: 'Names', icon: IconSearch, end: false },
+]
+
 export function AdminLayout() {
-  const { user, logout } = useAuth()
+  const { user, isSuperAdmin, logout } = useAuth()
   const location = useLocation()
   const [loggingOut, setLoggingOut] = useState(false)
+
+  const navItems = isSuperAdmin ? NAV_ITEMS : LIMITED_NAV_ITEMS
+  const bottomItems = isSuperAdmin ? BOTTOM_ITEMS : LIMITED_NAV_ITEMS
 
   const handleLogout = async () => {
     if (loggingOut) return
@@ -54,7 +62,7 @@ export function AdminLayout() {
         </div>
 
         <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1 p-3">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -65,13 +73,15 @@ export function AdminLayout() {
               {item.label}
             </NavLink>
           ))}
-          <NavLink
-            to="/admin/settings"
-            className={({ isActive }) => navLinkClass(isActive)}
-          >
-            <IconSettings className="h-5 w-5 shrink-0" />
-            Settings
-          </NavLink>
+          {isSuperAdmin ? (
+            <NavLink
+              to="/admin/settings"
+              className={({ isActive }) => navLinkClass(isActive)}
+            >
+              <IconSettings className="h-5 w-5 shrink-0" />
+              Settings
+            </NavLink>
+          ) : null}
         </nav>
 
         <div className="border-t border-cream-200 p-3">
@@ -149,22 +159,28 @@ export function AdminLayout() {
         aria-label="Bottom navigation"
         className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-cream-200 bg-white/97 backdrop-blur-sm lg:hidden"
       >
-        <div className="grid grid-cols-5">
-          {BOTTOM_ITEMS.slice(0, 2).map((item) => (
-            <BottomLink key={item.to} {...item} />
-          ))}
-          <div className="flex items-start justify-center">
-            <Link
-              to="/admin/participants/new"
-              aria-label="Add participant"
-              className="focus-ring -mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-maroon-700 text-white shadow-card-hover transition-transform active:scale-95"
-            >
-              <IconPlus className="h-7 w-7" />
-            </Link>
-          </div>
-          {BOTTOM_ITEMS.slice(2).map((item) => (
-            <BottomLink key={item.to} {...item} />
-          ))}
+        <div className={isSuperAdmin ? 'grid grid-cols-5' : 'grid grid-cols-2'}>
+          {isSuperAdmin ? (
+            <>
+              {bottomItems.slice(0, 2).map((item) => (
+                <BottomLink key={item.to} {...item} />
+              ))}
+              <div className="flex items-start justify-center">
+                <Link
+                  to="/admin/participants/new"
+                  aria-label="Add participant"
+                  className="focus-ring -mt-4 flex h-14 w-14 items-center justify-center rounded-full bg-maroon-700 text-white shadow-card-hover transition-transform active:scale-95"
+                >
+                  <IconPlus className="h-7 w-7" />
+                </Link>
+              </div>
+              {bottomItems.slice(2).map((item) => (
+                <BottomLink key={item.to} {...item} />
+              ))}
+            </>
+          ) : (
+            bottomItems.map((item) => <BottomLink key={item.to} {...item} />)
+          )}
         </div>
       </nav>
     </div>

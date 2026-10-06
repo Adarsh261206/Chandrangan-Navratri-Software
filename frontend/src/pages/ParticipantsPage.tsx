@@ -8,8 +8,10 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { IconChevronLeft, IconChevronRight, IconPlus, IconSearch, IconX } from '../components/ui/Icons'
 import { SkeletonList } from '../components/ui/Skeleton'
 import { api, ApiError } from '../services/api'
-import type { Paginated, Participant } from '../types'
+import type { EventDay, Paginated, Participant } from '../types'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { DaySelector } from '../components/DaySelector'
+import { useDayParam } from '../hooks/useDayParam'
 
 export default function ParticipantsPage() {
   const [query, setQuery] = useState('')
@@ -19,18 +21,22 @@ export default function ParticipantsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
+  const [days, setDays] = useState<EventDay[]>([])
+  const [daysLoading, setDaysLoading] = useState(true)
+  const [todayId, setTodayId] = useState<number | null>(null)
+  const [selectedDay, setSelectedDay] = useDayParam(days, todayId)
 
   const trimmedQuery = debouncedQuery.trim()
 
   const load = useCallback(
-    async (targetPage: number, search: string) => {
+    async (targetPage: number, search: string, dayId: number) => {
       const id = ++requestId.current
       setLoading(true)
       setError(null)
       try {
         const result = search
-          ? await api.participants.search(search, targetPage, 12)
-          : await api.participants.list({ page: targetPage, per_page: 12 })
+          ? await api.participants.search(search, targetPage, 12, dayId)
+          : await api.participants.list({ page: targetPage, per_page: 12, day_id: dayId })
         if (id !== requestId.current) return
         setData(result)
       } catch (err) {
@@ -44,12 +50,31 @@ export default function ParticipantsPage() {
   )
 
   useEffect(() => {
-    setPage(1)
-  }, [trimmedQuery])
+    let cancelled = false
+    api.eventDays
+      .list()
+      .then((payload) => {
+        if (!cancelled) {
+          setDays(payload.days)
+          setTodayId(payload.today_id)
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setDaysLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
-    void load(page, trimmedQuery)
-  }, [page, trimmedQuery, load])
+    setPage(1)
+  }, [trimmedQuery, selectedDay])
+
+  useEffect(() => {
+    void load(page, trimmedQuery, selectedDay)
+  }, [page, trimmedQuery, selectedDay, load])
 
   const pagination = data?.pagination
   const items = data?.items ?? []
@@ -61,7 +86,7 @@ export default function ParticipantsPage() {
         subtitle="Search by name, participant ID or age group."
         actions={
           <Link
-            to="/admin/participants/new"
+            to={`/admin/participants/new?day=${selectedDay}`}
             className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white shadow-card hover:bg-maroon-800"
           >
             <IconPlus className="h-4 w-4" />
@@ -70,7 +95,14 @@ export default function ParticipantsPage() {
         }
       />
 
-      <div className="relative">
+      <DaySelector
+        days={days}
+        value={selectedDay}
+        onChange={setSelectedDay}
+        loading={daysLoading}
+      />
+
+      <div className="mt-4 relative">
         <label htmlFor="participant-search" className="sr-only">
           Search participants
         </label>
@@ -104,17 +136,17 @@ export default function ParticipantsPage() {
           {loading
             ? 'Searching…'
             : pagination
-              ? `${pagination.total} ${trimmedQuery ? 'match' : 'participant'}${pagination.total === 1 ? '' : 'es'}`
+              ? `${pagination.total} ${trimmedQuery ? (pagination.total === 1 ? 'match' : 'matches') : (pagination.total === 1 ? 'participant' : 'participants')} on Day ${selectedDay}`
               : ''}
         </p>
         {!trimmedQuery ? (
-          <p className="text-xs text-charcoal-500">Newest first</p>
+          <p className="text-xs text-charcoal-500">All days · newest first</p>
         ) : null}
       </div>
 
       <div className="mt-3">
         {error ? (
-          <LoadError message={error} onRetry={() => void load(page, trimmedQuery)} />
+          <LoadError message={error} onRetry={() => void load(page, trimmedQuery, selectedDay)} />
         ) : loading ? (
           <SkeletonList count={5} />
         ) : items.length === 0 ? (
@@ -136,7 +168,7 @@ export default function ParticipantsPage() {
               description="Registered participants will appear here."
               action={
                 <Link
-                  to="/admin/participants/new"
+                  to={`/admin/participants/new?day=${selectedDay}`}
                   className="focus-ring flex min-h-11 items-center justify-center gap-2 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white hover:bg-maroon-800"
                 >
                   <IconPlus className="h-4 w-4" />

@@ -35,9 +35,29 @@ final class Auth
         Session::set('user', [
             'id' => (int) $user['id'],
             'username' => (string) $user['username'],
+            'role' => (string) ($user['role'] ?? 'admin'),
         ]);
         Session::set('csrf_token', bin2hex(random_bytes(24)));
         Session::set('last_activity', time());
+    }
+
+    public static function hasRole(string $role): bool
+    {
+        $user = self::user();
+        return $user !== null && (string) ($user['role'] ?? 'admin') === $role;
+    }
+
+    public static function requireRole(string $role): void
+    {
+        $user = self::require();
+        $actual = (string) ($user['role'] ?? 'admin');
+        if ($actual !== $role && $actual !== 'super_admin') {
+            throw new ApiException(
+                403,
+                'Your account does not have permission for this action.',
+                'forbidden_role'
+            );
+        }
     }
 
     public static function logout(): void

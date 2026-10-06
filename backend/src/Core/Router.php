@@ -11,7 +11,8 @@ final class Route
         public readonly string $pattern,
         public readonly \Closure $handler,
         public readonly bool $auth,
-        public readonly bool $csrf
+        public readonly bool $csrf,
+        public readonly ?string $role = null
     ) {
     }
 }
@@ -21,29 +22,50 @@ final class Router
     /** @var list<Route> */
     private array $routes = [];
 
-    public function add(string $method, string $pattern, \Closure $handler, bool $auth = true, bool $csrf = true): void
-    {
-        $this->routes[] = new Route(strtoupper($method), $pattern, $handler, $auth, $csrf);
+    public function add(
+        string $method,
+        string $pattern,
+        \Closure $handler,
+        bool $auth = true,
+        bool $csrf = true,
+        ?string $role = null
+    ): void {
+        $this->routes[] = new Route(strtoupper($method), $pattern, $handler, $auth, $csrf, $role);
     }
 
-    public function get(string $pattern, \Closure $handler, bool $auth = true): void
+    public function get(string $pattern, \Closure $handler, bool $auth = true, ?string $role = null): void
     {
-        $this->add('GET', $pattern, $handler, $auth, false);
+        $this->add('GET', $pattern, $handler, $auth, false, $role);
     }
 
-    public function post(string $pattern, \Closure $handler, bool $auth = true, bool $csrf = true): void
-    {
-        $this->add('POST', $pattern, $handler, $auth, $csrf);
+    public function post(
+        string $pattern,
+        \Closure $handler,
+        bool $auth = true,
+        bool $csrf = true,
+        ?string $role = null
+    ): void {
+        $this->add('POST', $pattern, $handler, $auth, $csrf, $role);
     }
 
-    public function put(string $pattern, \Closure $handler, bool $auth = true, bool $csrf = true): void
-    {
-        $this->add('PUT', $pattern, $handler, $auth, $csrf);
+    public function put(
+        string $pattern,
+        \Closure $handler,
+        bool $auth = true,
+        bool $csrf = true,
+        ?string $role = null
+    ): void {
+        $this->add('PUT', $pattern, $handler, $auth, $csrf, $role);
     }
 
-    public function delete(string $pattern, \Closure $handler, bool $auth = true, bool $csrf = true): void
-    {
-        $this->add('DELETE', $pattern, $handler, $auth, $csrf);
+    public function delete(
+        string $pattern,
+        \Closure $handler,
+        bool $auth = true,
+        bool $csrf = true,
+        ?string $role = null
+    ): void {
+        $this->add('DELETE', $pattern, $handler, $auth, $csrf, $role);
     }
 
     public function dispatch(Request $request): never
@@ -63,6 +85,10 @@ final class Router
 
             if ($route->auth && !Auth::check()) {
                 throw ApiException::unauthorized();
+            }
+
+            if ($route->role !== null) {
+                Auth::requireRole($route->role);
             }
 
             if ($route->csrf && $request->method !== 'GET' && Auth::check()) {

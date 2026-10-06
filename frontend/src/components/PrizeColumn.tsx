@@ -18,11 +18,13 @@ interface PrizeColumnProps {
   ageGroupId: number
   participants: Participant[]
   loading?: boolean
+  /** Navratri day used for the "Add Participant" deep link (?day=N). */
+  day?: number
 }
 
-export function PrizeColumn({ prize, ageGroupId, participants, loading }: PrizeColumnProps) {
+export function PrizeColumn({ prize, ageGroupId, participants, loading, day }: PrizeColumnProps) {
   const accent = columnAccents[prize]
-  const addPath = `/admin/participants/new?group=${ageGroupId}&prize=${prize}`
+  const addPath = `/admin/participants/new?group=${ageGroupId}&prize=${prize}${day ? `&day=${day}` : ''}`
 
   return (
     <section

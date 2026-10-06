@@ -7,12 +7,14 @@ import { DuplicateDialog } from '../components/DuplicateDialog'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Field, Input } from '../components/ui/Form'
+import { Field, Input, Select } from '../components/ui/Form'
 import { IconGroups, IconPlus } from '../components/ui/Icons'
 import { Skeleton } from '../components/ui/Skeleton'
 import { api, ApiError } from '../services/api'
 import { useToast } from '../hooks/useToast'
-import type { AgeGroup, DuplicateLevel, DuplicateMatch, PrizePosition } from '../types'
+import { useAuth } from '../services/auth'
+import { useDayParam } from '../hooks/useDayParam'
+import type { AgeGroup, DuplicateLevel, DuplicateMatch, EventDay, PrizePosition } from '../types'
 import { cn } from '../utils/cn'
 import { pickPrimaryMatch } from '../utils/duplicates'
 import { PRIZE_EMOJI, PRIZE_LABELS } from '../utils/format'
@@ -24,6 +26,7 @@ interface Draft {
   name: string
   prize: PrizePosition
   groupId: number
+  dayId?: number
 }
 
 function makeRequestId(): string {
@@ -39,10 +42,14 @@ export default function AddParticipantPage() {
   const [searchParams] = useSearchParams()
 
   const [ageGroups, setAgeGroups] = useState<AgeGroup[]>([])
+  const [days, setDays] = useState<EventDay[]>([])
+  const [todayId, setTodayId] = useState<number | null>(null)
   const [loadingGroups, setLoadingGroups] = useState(true)
   const [groupsError, setGroupsError] = useState<string | null>(null)
 
   const [groupId, setGroupId] = useState<number | null>(null)
+  // ?day=N → last used day → today → Day 1 (same rule as every other page).
+  const [dayId, setDayId] = useDayParam(days, todayId)
   const [prize, setPrize] = useState<PrizePosition>(1)
   const [name, setName] = useState('')
   const [photo, setPhoto] = useState<CompressedImage | null>(null)
@@ -53,7 +60,8 @@ export default function AddParticipantPage() {
   const [liveDuplicate, setLiveDuplicate] = useState<DuplicateMatch[] | null>(null)
   const [duplicateLevel, setDuplicateLevel] = useState<Exclude<DuplicateLevel, 'none'> | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [saved, setSaved] = useState<string | null>(null)
+  const [saved, setSaved] = useState<{ code: string; name: string; dayId: number } | null>(null)
+  const { isSuperAdmin } = useAuth()
 
   const nameInputRef = useRef<HTMLInputElement | null>(null)
   const requestIdRef = useRef<string>(makeRequestId())
@@ -71,8 +79,13 @@ export default function AddParticipantPage() {
     setLoadingGroups(true)
     setGroupsError(null)
     try {
-      const data = await api.ageGroups.list()
+      const [data, dayList] = await Promise.all([
+        api.ageGroups.list(),
+        api.eventDays.list(),
+      ])
       setAgeGroups(data.items)
+      setDays(dayList.days)
+      setTodayId(dayList.today_id)
 
       const queryGroup = Number(searchParams.get('group'))
       const queryPrize = Number(searchParams.get('prize'))
@@ -117,13 +130,13 @@ export default function AddParticipantPage() {
 
   useEffect(() => {
     if (groupId === null) return
-    const draft: Draft = { name, prize, groupId }
+    const draft: Draft = { name, prize, groupId, dayId }
     try {
       window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
     } catch {
       // Storage may be unavailable (private mode) — the form still works.
     }
-  }, [name, prize, groupId])
+  }, [name, prize, groupId, dayId])
 
   /* ---------------------------------------------------------------
    * Live duplicate check (debounced, server-side)
@@ -139,7 +152,7 @@ export default function AddParticipantPage() {
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
       api.participants
-        .checkDuplicate(trimmed, groupId, prize, controller.signal)
+        .checkDuplicate(trimmed, groupId, prize, dayId, controller.signal)
         .then((result) => {
           setLiveDuplicate(result.matches)
           setDuplicateLevel(result.level === 'none' ? null : result.level)
@@ -153,7 +166,7 @@ export default function AddParticipantPage() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [name, groupId, prize])
+  }, [name, groupId, prize, dayId])
 
   /* ---------------------------------------------------------------
    * Save
@@ -183,13 +196,18 @@ export default function AddParticipantPage() {
       formData.append('name', trimmed)
       formData.append('age_group_id', String(groupId))
       formData.append('prize_position', String(prize))
+      formData.append('day_id', String(dayId))
       formData.append('request_id', requestIdRef.current)
       if (force) formData.append('force', '1')
       if (photo) formData.append('photo', photo.blob, photo.filename)
 
       try {
         const result = await api.participants.create(formData)
-        setSaved(result.participant.participant_code)
+        setSaved({
+          code: result.participant.participant_code,
+          name: trimmed,
+          dayId,
+        })
         setDialogOpen(false)
         setDuplicateLevel(null)
         setLiveDuplicate(null)
@@ -204,7 +222,7 @@ export default function AddParticipantPage() {
           // Ignore.
         }
         toast.success('Participant added', {
-          description: `${trimmed} • ${group.name} • ${PRIZE_LABELS[prize]}`,
+          description: `${trimmed} • ${days.find((day) => day.id === dayId)?.label ?? `Day ${dayId}`} • ${group.name} • ${PRIZE_LABELS[prize]}`,
         })
         window.setTimeout(() => nameInputRef.current?.focus(), 60)
       } catch (error) {
@@ -238,15 +256,18 @@ export default function AddParticipantPage() {
         setSaving(false)
       }
     },
-    [name, groupId, prize, photo, ageGroups, toast]
+    [name, groupId, prize, dayId, photo, ageGroups, days, toast]
   )
 
-  const backTo = groupId !== null ? `/admin/age-groups/${groupId}` : '/admin'
+  const backTo =
+    groupId !== null
+      ? `/admin/age-groups/${groupId}?day=${dayId}`
+      : `/admin?day=${dayId}`
 
   if (groupsError) {
     return (
       <div>
-        <PageHeader title="Add Participant" backTo="/admin" backLabel="Dashboard" />
+        <PageHeader title="Add Participant" backTo={`/admin?day=${dayId}`} backLabel="Dashboard" />
         <LoadError message={groupsError} onRetry={() => void loadGroups()} />
       </div>
     )
@@ -255,7 +276,7 @@ export default function AddParticipantPage() {
   if (!loadingGroups && ageGroups.length === 0) {
     return (
       <div>
-        <PageHeader title="Add Participant" backTo="/admin" backLabel="Dashboard" />
+        <PageHeader title="Add Participant" backTo={`/admin?day=${dayId}`} backLabel="Dashboard" />
         <EmptyState
           icon={<IconGroups className="h-6 w-6" />}
           title="No age groups available"
@@ -272,23 +293,26 @@ export default function AddParticipantPage() {
 
   const activeDuplicate = liveDuplicate ?? []
   const primaryMatch = duplicateLevel
-    ? pickPrimaryMatch(duplicateLevel, activeDuplicate, { ageGroupId: groupId, prize })
+    ? pickPrimaryMatch(duplicateLevel, activeDuplicate, { ageGroupId: groupId, prize, dayId })
     : null
+  const matchSlot = (match: { day_id: number; day_label: string; age_group_name: string; prize_position: PrizePosition }) =>
+    `${match.day_id !== dayId ? `${match.day_label}, ` : ''}${match.age_group_name} → ${PRIZE_LABELS[match.prize_position]}`
+
   const hint =
     duplicateLevel === 'exact' && primaryMatch
       ? {
           tone: 'danger' as const,
-          text: `${primaryMatch.name} is already registered in ${primaryMatch.age_group_name} → ${PRIZE_EMOJI[primaryMatch.prize_position]} ${PRIZE_LABELS[primaryMatch.prize_position]}. This slot cannot be taken again.`,
+          text: `${primaryMatch.name} is already registered in ${matchSlot(primaryMatch)}. This slot cannot be taken again.`,
         }
       : duplicateLevel === 'group' && primaryMatch
         ? {
             tone: 'warning' as const,
-            text: `${primaryMatch.name} is already in ${primaryMatch.age_group_name} → ${PRIZE_LABELS[primaryMatch.prize_position]} for this group. Please verify before saving.`,
+            text: `${primaryMatch.name} is already in ${matchSlot(primaryMatch)} for this group. Please verify before saving.`,
           }
         : duplicateLevel === 'other' && primaryMatch
           ? {
               tone: 'warning' as const,
-              text: `${primaryMatch.name} was previously registered in ${primaryMatch.age_group_name} → ${PRIZE_LABELS[primaryMatch.prize_position]}. Continue if this is a different person.`,
+              text: `${primaryMatch.name} was previously registered in ${matchSlot(primaryMatch)}. Continue if this is a different person.`,
             }
           : null
 
@@ -311,6 +335,8 @@ export default function AddParticipantPage() {
             <span className="inline-block h-6 w-48 animate-pulse rounded bg-white/15" />
           ) : (
             <>
+              {days.find((day) => day.id === dayId)?.label ?? `Day ${dayId}`}
+              <span className="mx-2 text-gold-300">→</span>
               {selectedGroup?.name ?? 'Select an age group'}
               <span className="mx-2 text-gold-300">→</span>
               {PRIZE_EMOJI[prize]} {PRIZE_LABELS[prize]}
@@ -323,18 +349,33 @@ export default function AddParticipantPage() {
         <Alert
           tone="success"
           className="mt-4"
-          title={`Saved · ${saved}`}
+          title={`Saved · ${saved.name} (${saved.code})`}
           action={
-            <Link
-              to="/admin/participants/new"
-              onClick={() => setSaved(null)}
-              className="focus-ring rounded-lg px-2 py-1 text-sm font-semibold text-emerald-700 underline"
-            >
-              Add another
-            </Link>
+            <span className="flex flex-col items-end gap-1">
+              <Link
+                to={
+                  isSuperAdmin
+                    ? `/admin/results?day=${saved.dayId}`
+                    : `/admin?day=${saved.dayId}`
+                }
+                className="focus-ring whitespace-nowrap rounded-lg px-2 py-1 text-sm font-semibold text-emerald-700 underline"
+              >
+                View Day {saved.dayId}
+              </Link>
+              <Link
+                to="/admin/participants/new"
+                onClick={() => setSaved(null)}
+                className="focus-ring whitespace-nowrap rounded-lg px-2 py-1 text-sm font-semibold text-emerald-700 underline"
+              >
+                Add another
+              </Link>
+            </span>
           }
         >
-          Ready for the next participant — group and prize are kept selected.
+          {saved.name} is on{' '}
+          <b>{days.find((day) => day.id === saved.dayId)?.label ?? `Day ${saved.dayId}`}</b> →{' '}
+          {selectedGroup?.name ?? ''} → {PRIZE_EMOJI[prize]} {PRIZE_LABELS[prize]}. Ready for the
+          next participant — day, group and prize are kept selected.
         </Alert>
       ) : null}
 
@@ -345,10 +386,41 @@ export default function AddParticipantPage() {
         }}
         className="mt-5 flex flex-col gap-6"
       >
+        {/* 0 — Navratri day */}
+        <section aria-labelledby="step-day">
+          <h2 id="step-day" className="mb-2 text-sm font-bold uppercase tracking-wide text-charcoal-500">
+            1 · Navratri Day
+          </h2>
+          {loadingGroups ? (
+            <Skeleton className="h-12 w-full rounded-xl" />
+          ) : (
+            <Field label="Event day" htmlFor="participant-day" required>
+              <Select
+                id="participant-day"
+                value={String(dayId)}
+                disabled={saving}
+                onChange={(event) => {
+                  setDayId(Number(event.target.value))
+                  setSaved(null)
+                  setLiveDuplicate(null)
+                  setDuplicateLevel(null)
+                }}
+              >
+                {days.map((day) => (
+                  <option key={day.id} value={day.id}>
+                    {day.label} · {day.date}
+                    {day.is_today ? ' (today)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+        </section>
+
         {/* 1 — Age group */}
         <section aria-labelledby="step-age-group">
           <h2 id="step-age-group" className="mb-2 text-sm font-bold uppercase tracking-wide text-charcoal-500">
-            1 · Age Group
+            2 · Age Group
           </h2>
           {loadingGroups ? (
             <div className="flex flex-wrap gap-2">
@@ -392,7 +464,7 @@ export default function AddParticipantPage() {
         {/* 2 — Prize */}
         <section aria-labelledby="step-prize">
           <h2 id="step-prize" className="mb-2 text-sm font-bold uppercase tracking-wide text-charcoal-500">
-            2 · Prize Section
+            3 · Prize Section
           </h2>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="Prize position">
             {([1, 2, 3] as PrizePosition[]).map((position) => {
@@ -426,7 +498,7 @@ export default function AddParticipantPage() {
         {/* 3 — Name */}
         <section aria-labelledby="step-name">
           <h2 id="step-name" className="mb-2 text-sm font-bold uppercase tracking-wide text-charcoal-500">
-            3 · Participant Name
+            4 · Participant Name
           </h2>
           <Field label="Full name" htmlFor="participant-name" required error={nameError ?? undefined}>
             <Input
@@ -457,7 +529,7 @@ export default function AddParticipantPage() {
         {/* 4 — Photo */}
         <section aria-labelledby="step-photo">
           <h2 id="step-photo" className="mb-2 text-sm font-bold uppercase tracking-wide text-charcoal-500">
-            4 · Photo (optional)
+            5 · Photo (optional)
           </h2>
           <PhotoCapture
             value={photo}
@@ -484,7 +556,7 @@ export default function AddParticipantPage() {
           <p className="mt-2 text-center text-xs text-charcoal-500">
             Saves as{' '}
             <b className="text-charcoal-700">
-              {selectedGroup?.name ?? '—'} → {PRIZE_EMOJI[prize]} {PRIZE_LABELS[prize]}
+              {days.find((day) => day.id === dayId)?.label ?? `Day ${dayId}`} · {selectedGroup?.name ?? '—'} → {PRIZE_EMOJI[prize]} {PRIZE_LABELS[prize]}
             </b>
           </p>
         </div>
@@ -499,7 +571,9 @@ export default function AddParticipantPage() {
         target={{
           ageGroupName: selectedGroup?.name ?? '',
           prize,
+          dayLabel: days.find((day) => day.id === dayId)?.label ?? `Day ${dayId}`,
         }}
+        targetDayId={dayId}
         loading={saving}
         onCancel={() => setDialogOpen(false)}
         onAddAnyway={() => {

@@ -1,6 +1,13 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { FullScreenLoader, RedirectIfAuthenticated, RequireAuth, useRouteFocus } from './components/Guards'
+import {
+  FullScreenLoader,
+  RedirectIfAuthenticated,
+  RequireAuth,
+  RequireSuperAdmin,
+  useRouteFocus,
+} from './components/Guards'
+import { useAuth } from './services/auth'
 import { AdminLayout } from './layouts/AdminLayout'
 import { PublicLayout } from './layouts/PublicLayout'
 
@@ -15,6 +22,13 @@ const ResultsAdminPage = lazy(() => import('./pages/ResultsAdminPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const PublicResultsPage = lazy(() => import('./pages/PublicResultsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const SimpleHomePage = lazy(() => import('./pages/SimpleHomePage'))
+
+/** Super admins land on the dashboard; the limited admin role gets the simple home. */
+function AdminHomePage() {
+  const { isSuperAdmin } = useAuth()
+  return isSuperAdmin ? <DashboardPage /> : <SimpleHomePage />
+}
 
 function RouteFallback() {
   return (
@@ -55,14 +69,42 @@ function App() {
             </RequireAuth>
           }
         >
-          <Route index element={<DashboardPage />} />
-          <Route path="age-groups" element={<AgeGroupsPage />} />
-          <Route path="age-groups/:groupId" element={<AgeGroupDetailPage />} />
+          <Route index element={<AdminHomePage />} />
+          <Route
+            path="age-groups"
+            element={
+              <RequireSuperAdmin>
+                <AgeGroupsPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="age-groups/:groupId"
+            element={
+              <RequireSuperAdmin>
+                <AgeGroupDetailPage />
+              </RequireSuperAdmin>
+            }
+          />
           <Route path="participants" element={<ParticipantsPage />} />
           <Route path="participants/new" element={<AddParticipantPage />} />
           <Route path="participants/:participantId" element={<ParticipantDetailPage />} />
-          <Route path="results" element={<ResultsAdminPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route
+            path="results"
+            element={
+              <RequireSuperAdmin>
+                <ResultsAdminPage />
+              </RequireSuperAdmin>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <RequireSuperAdmin>
+                <SettingsPage />
+              </RequireSuperAdmin>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

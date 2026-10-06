@@ -6,6 +6,7 @@ import { LoadError } from '../components/LoadError'
 import { Avatar } from '../components/ui/Avatar'
 import { Badge } from '../components/ui/Card'
 import {
+  IconCalendar,
   IconGroups,
   IconPlus,
   IconSearch,
@@ -13,7 +14,7 @@ import {
 } from '../components/ui/Icons'
 import { Skeleton } from '../components/ui/Skeleton'
 import { api, ApiError } from '../services/api'
-import type { DashboardStats } from '../types'
+import type { DashboardStats, EventDay } from '../types'
 import { cn } from '../utils/cn'
 import { formatDate, formatTime, PRIZE_EMOJI, PRIZE_LABELS } from '../utils/format'
 
@@ -62,7 +63,7 @@ export default function DashboardPage() {
         }
         actions={
           <Link
-            to="/admin/participants/new"
+            to={`/admin/participants/new?day=${stats?.current_day.id ?? 1}`}
             className="focus-ring hidden min-h-11 items-center gap-2 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white shadow-card transition-colors hover:bg-maroon-800 sm:inline-flex"
           >
             <IconPlus className="h-4 w-4" />
@@ -75,6 +76,58 @@ export default function DashboardPage() {
         <LoadError message={error} onRetry={() => void load()} />
       ) : (
         <>
+          {/* Current Navratri day + per-day winners */}
+          {!loading && stats?.current_day ? (
+            <section
+              aria-label="Current Navratri day"
+              className="rounded-2xl border border-gold-200 bg-gradient-to-r from-maroon-700 to-maroon-800 p-4 text-white shadow-card sm:p-5"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                    <IconCalendar className="h-5 w-5 text-gold-300" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-gold-300">
+                      {stats.current_day.is_today ? 'Today' : 'Current day'}
+                    </p>
+                    <p className="text-lg font-extrabold leading-tight sm:text-xl">
+                      {stats.current_day.label}
+                      <span className="ml-2 text-sm font-medium text-maroon-100">
+                        {stats.current_day.weekday} · {stats.current_day.date}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to={`/admin/results?day=${stats.current_day.id}`}
+                  className="focus-ring inline-flex min-h-11 items-center rounded-xl bg-white/15 px-4 text-sm font-semibold text-white hover:bg-white/25"
+                >
+                  View Day Winners
+                </Link>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {stats.days.map((day: EventDay) => (
+                  <Link
+                    key={day.id}
+                    to={`/admin/results?day=${day.id}`}
+                    className={cn(
+                      'focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
+                      day.id === stats.current_day.id
+                        ? 'border-gold-300 bg-gold-300 text-maroon-900'
+                        : 'border-white/25 bg-white/10 text-white hover:bg-white/20'
+                    )}
+                  >
+                    D{day.id}
+                    <span className="tabular-nums">{day.winner_count ?? 0}</span>
+                    <span className="sr-only"> winners</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {/* Statistics */}
           <section aria-label="Statistics" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {loading ? (
@@ -114,7 +167,7 @@ export default function DashboardPage() {
             </h2>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <QuickAction
-                to="/admin/participants/new"
+                to={`/admin/participants/new?day=${stats?.current_day.id ?? 1}`}
                 icon={<IconPlus className="h-6 w-6" />}
                 label="Add Participant"
                 description="Register into a prize section"
@@ -241,7 +294,9 @@ export default function DashboardPage() {
                           {participant.name}
                         </p>
                         <p className="truncate text-xs text-charcoal-500">
-                          {participant.participant_code} · {participant.age_group_name} ·{' '}
+                          {participant.participant_code} ·{' '}
+                          {participant.day_label ? `${participant.day_label} · ` : ''}
+                          {participant.age_group_name} ·{' '}
                           {PRIZE_EMOJI[participant.prize_position]}{' '}
                           {PRIZE_LABELS[participant.prize_position]}
                         </p>

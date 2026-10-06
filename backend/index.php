@@ -8,6 +8,7 @@ $config = require __DIR__ . '/bootstrap.php';
 use App\Controllers\AgeGroupController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
+use App\Controllers\EventDayController;
 use App\Controllers\HealthController;
 use App\Controllers\ParticipantController;
 use App\Controllers\ResultController;
@@ -50,19 +51,24 @@ $router->post('/auth/change-password', static fn (Request $r) => AuthController:
 // --- Dashboard -------------------------------------------------------------
 $router->get('/dashboard/stats', static fn () => DashboardController::stats($config));
 
+// --- Event days (Navratri day 1..9) ----------------------------------------
+$router->get('/event-days', static fn () => EventDayController::index($config), auth: false);
+$router->put('/event-days', static fn (Request $r) => EventDayController::update($r, $config), role: 'super_admin');
+
 // --- Age groups ------------------------------------------------------------
 $router->get('/age-groups', static fn () => AgeGroupController::index($config));
 $router->get('/age-groups/{id}', static fn (Request $r, array $p) => AgeGroupController::show($p, $config));
-$router->post('/age-groups', static fn (Request $r) => AgeGroupController::store($r, $config));
-$router->post('/age-groups/reorder', static fn (Request $r) => AgeGroupController::reorder($r, $config));
-$router->put('/age-groups/{id}', static fn (Request $r, array $p) => AgeGroupController::update($r, $p, $config));
-$router->delete('/age-groups/{id}', static fn (Request $r, array $p) => AgeGroupController::destroy($r, $p, $config));
+$router->post('/age-groups', static fn (Request $r) => AgeGroupController::store($r, $config), role: 'super_admin');
+$router->post('/age-groups/reorder', static fn (Request $r) => AgeGroupController::reorder($r, $config), role: 'super_admin');
+$router->put('/age-groups/{id}', static fn (Request $r, array $p) => AgeGroupController::update($r, $p, $config), role: 'super_admin');
+$router->delete('/age-groups/{id}', static fn (Request $r, array $p) => AgeGroupController::destroy($r, $p, $config), role: 'super_admin');
 
 // --- Participants ----------------------------------------------------------
 $router->get('/participants', static fn (Request $r) => ParticipantController::index($r, $config));
 $router->get('/participants/search', static fn (Request $r) => ParticipantController::search($r, $config));
 $router->get('/participants/check-duplicate', static fn (Request $r) => ParticipantController::checkDuplicate($r, $config));
 $router->post('/participants', static fn (Request $r) => ParticipantController::store($r, $config));
+$router->post('/participants/{id}/move', static fn (Request $r, array $p) => ParticipantController::move($r, $p, $config));
 $router->get('/participants/{id}', static fn (Request $r, array $p) => ParticipantController::show($r, $p, $config));
 $router->delete('/participants/{id}', static fn (Request $r, array $p) => ParticipantController::destroy($r, $p, $config));
 

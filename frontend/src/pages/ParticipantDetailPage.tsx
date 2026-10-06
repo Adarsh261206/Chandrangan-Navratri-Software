@@ -11,8 +11,9 @@ import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
 import { api, ApiError } from '../services/api'
 import { useToast } from '../hooks/useToast'
-import type { Participant } from '../types'
+import type { Participant, PrizePosition } from '../types'
 import { PRIZE_EMOJI, PRIZE_LABELS, formatLongDate } from '../utils/format'
+import { cn } from '../utils/cn'
 
 export default function ParticipantDetailPage() {
   const { participantId = '' } = useParams()
@@ -26,6 +27,7 @@ export default function ParticipantDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [lightbox, setLightbox] = useState(false)
+  const [movingTo, setMovingTo] = useState<PrizePosition | null>(null)
 
   const load = useCallback(async () => {
     if (!Number.isFinite(id) || id <= 0) {
@@ -60,6 +62,27 @@ export default function ParticipantDetailPage() {
       setConfirmDelete(false)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const moveTo = async (target: PrizePosition) => {
+    if (movingTo !== null) return
+    setMovingTo(target)
+    try {
+      const result = await api.participants.move(id, target)
+      toast.success(
+        result.swapped_with ? 'Prize positions swapped' : 'Winner moved',
+        {
+          description: result.swapped_with
+            ? `${result.participant.name} → ${PRIZE_LABELS[target]} · ${result.swapped_with.name} → ${PRIZE_LABELS[result.swapped_with.prize_position]}`
+            : `${result.participant.name} → ${PRIZE_LABELS[target]}`,
+        }
+      )
+      await load()
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Could not move this winner')
+    } finally {
+      setMovingTo(null)
     }
   }
 
@@ -132,6 +155,7 @@ export default function ParticipantDetailPage() {
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <Badge tone="maroon">{participant.participant_code}</Badge>
             <Badge tone="gold">{PRIZE_EMOJI[participant.prize_position]} {PRIZE_LABELS[participant.prize_position]}</Badge>
+            <Badge tone="maroon">{participant.day_label ?? `Day ${participant.day_id}`}</Badge>
           </div>
         </div>
 
@@ -146,20 +170,63 @@ export default function ParticipantDetailPage() {
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-cream-200 bg-cream-100/70 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-charcoal-500">
+                  Navratri Day
+                </p>
+                <p className="mt-1 text-base font-semibold text-charcoal-900">
+                  {participant.day_label ?? `Day ${participant.day_id}`}
+                  {participant.day_date ? (
+                    <span className="ml-1.5 text-sm font-medium text-charcoal-500">
+                      {participant.day_date}
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+              <div className="rounded-xl border border-cream-200 bg-cream-100/70 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-charcoal-500">
                   Age Group
                 </p>
                 <p className="mt-1 text-base font-semibold text-charcoal-900">
                   {participant.age_group_name}
                 </p>
               </div>
-              <div className="rounded-xl border border-cream-200 bg-cream-100/70 p-3">
-                <p className="text-xs font-bold uppercase tracking-wide text-charcoal-500">
-                  Prize Section
-                </p>
-                <p className="mt-1 text-base font-semibold text-maroon-800">
-                  {PRIZE_EMOJI[participant.prize_position]} {PRIZE_LABELS[participant.prize_position]}
-                </p>
+            </div>
+
+            {/* Move to another prize (swap within the same day + group) */}
+            <div className="mt-4 rounded-xl border border-cream-200 bg-cream-100/70 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-charcoal-500">
+                Prize Section
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-2" role="group" aria-label="Move to prize">
+                {([1, 2, 3] as PrizePosition[]).map((position) => {
+                  const current = position === participant.prize_position
+                  const blocked = (participant.occupied_slots?.[position] ?? 0) > 0
+                  return (
+                    <button
+                      key={position}
+                      type="button"
+                      disabled={current || movingTo !== null}
+                      aria-pressed={current}
+                      onClick={() => void moveTo(position)}
+                      className={cn(
+                        'focus-ring flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-1 transition-colors',
+                        current
+                          ? 'border-maroon-700 bg-maroon-700 text-white shadow-card'
+                          : 'border-cream-300 bg-white text-charcoal-600 hover:bg-cream-50',
+                        !current && movingTo !== null && 'cursor-not-allowed opacity-50'
+                      )}
+                    >
+                      <span className="text-base leading-none">{PRIZE_EMOJI[position]}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-wide">
+                        {PRIZE_LABELS[position]}
+                        {!current && blocked ? ' · swap' : ''}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
+              <p className="mt-2 text-xs text-charcoal-500">
+                Occupied sections swap both winners; empty sections just move this winner.
+              </p>
             </div>
 
             <div className="mt-4 border-t border-cream-200 pt-4">
@@ -201,7 +268,7 @@ export default function ParticipantDetailPage() {
                   ) : null}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-charcoal-900">
-                      {item.age_group_name} → {PRIZE_EMOJI[item.prize_position]}{' '}
+                      {item.day_label} · {item.age_group_name} → {PRIZE_EMOJI[item.prize_position]}{' '}
                       {PRIZE_LABELS[item.prize_position]}
                       {item.is_current ? (
                         <span className="ml-2 inline-block rounded-full bg-maroon-50 px-2 py-0.5 text-[11px] font-bold text-maroon-700">
@@ -248,7 +315,7 @@ export default function ParticipantDetailPage() {
             className="mx-auto max-h-[70vh] w-auto rounded-xl object-contain"
           />
           <p className="mt-3 text-center text-sm text-charcoal-500">
-            {participant.participant_code} · {participant.age_group_name} ·{' '}
+            {participant.participant_code} · {participant.day_label} · {participant.age_group_name} ·{' '}
             {PRIZE_LABELS[participant.prize_position]}
           </p>
         </div>

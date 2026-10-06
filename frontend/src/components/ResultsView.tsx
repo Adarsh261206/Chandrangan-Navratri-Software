@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom'
 import { EmptyState } from './ui/EmptyState'
 import { Modal } from './ui/Modal'
 import { Skeleton } from './ui/Skeleton'
-import { IconChevronRight, IconEye } from './ui/Icons'
+import {
+  IconChevronRight,
+  IconEye,
+  IconPlus,
+  IconSortDown,
+  IconSortUp,
+} from './ui/Icons'
 import type { PublicAgeGroup, PublicWinner, PrizePosition } from '../types'
 import { PRIZE_EMOJI, PRIZE_LONG_LABELS, formatDate } from '../utils/format'
 import { cn } from '../utils/cn'
@@ -20,9 +26,25 @@ interface ResultsViewProps {
   /** Public pages hide admin-only details such as registration dates. */
   variant?: 'public' | 'admin'
   loading?: boolean
+  /** When provided, each prize section gets an "Add" button that opens the entry form. */
+  onAdd?: (prize: PrizePosition) => void
+  /**
+   * When provided, the single winner in a section gets ↑ / ↓ buttons that swap
+   * them with the neighbouring prize section (empty target = plain move).
+   */
+  onMove?: (prize: PrizePosition, direction: 'up' | 'down') => void
+  /** Is a move currently in flight? Disables the arrows. */
+  moving?: boolean
 }
 
-export function ResultsView({ group, variant = 'public', loading = false }: ResultsViewProps) {
+export function ResultsView({
+  group,
+  variant = 'public',
+  loading = false,
+  onAdd,
+  onMove,
+  moving = false,
+}: ResultsViewProps) {
   const [lightbox, setLightbox] = useState<PublicWinner | null>(null)
 
   if (loading) {
@@ -66,8 +88,20 @@ export function ResultsView({ group, variant = 'public', loading = false }: Resu
                 <h3 className="text-sm font-bold uppercase tracking-wider">
                   {PRIZE_EMOJI[prize]} {PRIZE_LONG_LABELS[prize]}
                 </h3>
-                <span className="text-xs font-bold tabular-nums opacity-70">
-                  {winners.length}
+                <span className="flex items-center gap-2.5">
+                  <span className="text-xs font-bold tabular-nums opacity-70">
+                    {winners.length}
+                  </span>
+                  {onAdd && winners.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onAdd(prize)}
+                      className="focus-ring -my-1 inline-flex min-h-8 items-center gap-1 rounded-lg border border-current/30 bg-white/70 px-2.5 text-xs font-bold uppercase tracking-wide hover:bg-white"
+                    >
+                      <IconPlus className="h-3.5 w-3.5" />
+                      Add
+                    </button>
+                  ) : null}
                 </span>
               </div>
 
@@ -81,7 +115,16 @@ export function ResultsView({ group, variant = 'public', loading = false }: Resu
                       : 'Results for this section will appear once announced.'
                   }
                   action={
-                    variant === 'admin' ? (
+                    onAdd ? (
+                      <button
+                        type="button"
+                        onClick={() => onAdd(prize)}
+                        className="focus-ring flex min-h-11 items-center justify-center gap-2 rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white hover:bg-maroon-800"
+                      >
+                        <IconPlus className="h-4 w-4" />
+                        Add Name
+                      </button>
+                    ) : variant === 'admin' ? (
                       <Link
                         to={`/admin/participants/new?group=${group.id}&prize=${prize}`}
                         className="focus-ring flex min-h-11 items-center justify-center rounded-xl bg-maroon-700 px-4 text-sm font-semibold text-white hover:bg-maroon-800"
@@ -144,6 +187,35 @@ export function ResultsView({ group, variant = 'public', loading = false }: Resu
                         >
                           <IconEye className="h-5 w-5" />
                         </button>
+                      ) : null}
+
+                      {onMove && winners.length === 1 ? (
+                        <span
+                          className="flex shrink-0 flex-col gap-1"
+                          role="group"
+                          aria-label={`Move ${winner.name} between prizes`}
+                        >
+                          <button
+                            type="button"
+                            disabled={moving || prize === 1}
+                            onClick={() => onMove(prize, 'up')}
+                            aria-label={`Move ${winner.name} to a higher prize`}
+                            title="Move up"
+                            className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg border border-cream-300 text-charcoal-600 hover:bg-cream-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                          >
+                            <IconSortUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={moving || prize === 3}
+                            onClick={() => onMove(prize, 'down')}
+                            aria-label={`Move ${winner.name} to a lower prize`}
+                            title="Move down"
+                            className="focus-ring flex h-9 w-9 items-center justify-center rounded-lg border border-cream-300 text-charcoal-600 hover:bg-cream-100 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent"
+                          >
+                            <IconSortDown className="h-4 w-4" />
+                          </button>
+                        </span>
                       ) : null}
                     </li>
                   ))}

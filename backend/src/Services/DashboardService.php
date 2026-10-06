@@ -67,14 +67,31 @@ final class DashboardService
 
         $recent = Database::all(
             'SELECT p.id, p.participant_code, p.name, p.prize_position, p.photo_thumb_path, p.created_at,
-                    g.name AS age_group_name
+                    g.name AS age_group_name, d.label AS day_label
              FROM participants p
              JOIN age_groups g ON g.id = p.age_group_id
+             JOIN event_days d ON d.id = p.day_id
              ORDER BY p.created_at DESC, p.id DESC
              LIMIT 5'
         );
 
+        $dayService = new EventDayService();
+        $dayList = $dayService->list();
+        $perDay = Database::all(
+            'SELECT day_id, COUNT(*) AS total FROM participants GROUP BY day_id'
+        );
+        $dayCounts = [];
+        foreach ($perDay as $row) {
+            $dayCounts[(int) $row['day_id']] = (int) $row['total'];
+        }
+        $days = array_map(static function (array $day) use ($dayCounts): array {
+            $day['winner_count'] = $dayCounts[(int) $day['id']] ?? 0;
+            return $day;
+        }, $dayList['days']);
+
         return [
+            'current_day' => $days[array_search($dayList['today_id'], array_column($days, 'id'), true) ?: 0] ?? $days[0],
+            'days' => $days,
             'total_participants' => (int) ($totals['total'] ?? 0),
             'today_registrations' => (int) ($totals['today'] ?? 0),
             'total_age_groups' => $ageGroupCount,
@@ -86,6 +103,7 @@ final class DashboardService
                     'participant_code' => $row['participant_code'],
                     'name' => $row['name'],
                     'age_group_name' => $row['age_group_name'],
+                    'day_label' => $row['day_label'] ?? null,
                     'prize_position' => (int) $row['prize_position'],
                     'photo_thumb' => ImageService::publicUrl($row['photo_thumb_path'] ?? null, $this->config),
                     'created_at' => $row['created_at'],
